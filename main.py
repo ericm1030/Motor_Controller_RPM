@@ -2,6 +2,7 @@ import machine
 import time
 from machine import Pin, I2C, ADC, PWM, Signal
 import uarray as array
+import rp2
 import gc
 # from pio_rpm import *
 from pico_i2c_lcd import I2cLcd
@@ -155,6 +156,7 @@ def counter_handler(sm):
     print("IRQ")
     global update_flag
 
+
     if not update_flag:
         sm0.put(133_000)
         sm0.exec("pull()")
@@ -215,6 +217,7 @@ e_stop_tripped_flag = False
 def emergency_stop(pin):
     global e_stop_tripped_flag
     pwm.duty_u16(0)
+    sm_blink_led.active(1)
     red_led.value(1)
     green_led.value(0)
     lcd.clear()
@@ -251,9 +254,6 @@ def main():
         # time.sleep(0.25)
         rpm = 0
 
-
-
-
         # Read RPM and switch.switch_pos() == 3
         if update_flag and not switch_start_in_position_3:
             data[0] = sm1.get()  # clock count
@@ -269,8 +269,6 @@ def main():
         if switch.switch_pos() == 1 or switch.switch_pos() == 2:
             adc_value = 65535 - adc.read_u16()
             print("ADC Value: " + str(adc_value))
-
-
 
         # If E Stop is not tripped, If tripped only mode 1 can reset it
         if not e_stop_tripped_flag:
@@ -350,15 +348,12 @@ def main():
                 print("Switch 1")
                 green_led.value(0)
                 red_led.value(0)
+                sm_blink_led.active(0)
                 lcd.clear()
                 lcd.print_line_col_in_place(0, 0, "Duty: ")
                 lcd.print_line_col_in_place(1, 0, "RPM: ")
 
         print("Duty Cycle: " + str(duty_cycle))
-
-
-
-
 
 
 if __name__ == "__main__":
