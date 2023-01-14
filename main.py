@@ -217,12 +217,12 @@ e_stop_tripped_flag = False
 def emergency_stop(pin):
     global e_stop_tripped_flag
     pwm.duty_u16(0)
-    sm_blink_led.active(1)
     red_led.value(1)
     green_led.value(0)
     lcd.clear()
     lcd.putstr("Emergency Stop")
     e_stop_tripped_flag = True
+    # sm_blink_led.active(1)
 
 
 # Emergency stop
@@ -233,8 +233,10 @@ emergency_stop_switch.irq(trigger=Pin.IRQ_FALLING, handler=emergency_stop)
 def main():
     global update_flag, e_stop_tripped_flag
 
-    lcd.print_line_col_in_place(0, 0, "Duty: ")
-    lcd.print_line_col_in_place(1, 0, "RPM: ")
+    lcd.print_line_col_in_place(0, 0, "Duty:")
+    lcd.print_line_col_in_place(1, 0, "RPM:")
+    lcd.print_line_col_in_place(0, 9, "|")
+    lcd.print_line_col_in_place(1, 9, "|")
 
     adc_value = 0
     duty_cycle = 0
@@ -310,7 +312,7 @@ def main():
                 green_led.value(0)
                 red_led.value(1)
                 duty_cycle = int((adc_value / 65535) * 100)
-                5
+
                 # pwm.duty_u16(0)
 
             # Safety mode. Motor is off
@@ -323,6 +325,7 @@ def main():
                 duty_cycle = int((adc_value / 65535) * 100)
                 pwm.duty_u16(0)
 
+
             # Error mode. Motor is off
             else:
                 print("Switch Error")
@@ -331,14 +334,31 @@ def main():
                 pwm.duty_u16(0)
 
             # Update LCD
-            if time.ticks_diff(time.ticks_ms(), lcd_start) > lcd_refresh_time:
+            if time.ticks_diff(time.ticks_ms(), lcd_start) > lcd_refresh_time and not e_stop_tripped_flag:
                 print("Updating LCD")
-                if switch.switch_pos() == 2 or switch.switch_pos() == 1:
-                    lcd.print_line_col_in_place(0, 6, "       ")
-                    lcd.print_line_col_in_place(0, 6, "%1.0f" % duty_cycle + "%")
 
-                lcd.print_line_col_in_place(1, 5, "        ")
-                lcd.print_line_col_in_place(1, 5, str(rpm))
+                # Print Mode on LCD
+                if switch.switch_pos() == 1:
+                    lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(1, 11, "Off")
+
+                elif switch.switch_pos() == 2:
+                    lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(1, 11, "Adj")
+
+                elif switch.switch_pos() == 3:
+                    lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(1, 11, "   ")
+                    lcd.print_line_col_in_place(1, 11, "On")
+
+
+
+                if switch.switch_pos() == 2 or switch.switch_pos() == 1:
+                    lcd.print_line_col_in_place(0, 5, "   ")
+                    lcd.print_line_col_in_place(0, 5, "%1.0f" % duty_cycle + "%")
+
+                lcd.print_line_col_in_place(1, 4, "    ")
+                lcd.print_line_col_in_place(1, 4, str(rpm))
                 lcd_start = time.ticks_ms()
 
         # Reset E Stop
@@ -348,10 +368,15 @@ def main():
                 print("Switch 1")
                 green_led.value(0)
                 red_led.value(0)
-                sm_blink_led.active(0)
+                # sm_blink_led.active(0)
+
+                # Reset LCD after E Stop
                 lcd.clear()
-                lcd.print_line_col_in_place(0, 0, "Duty: ")
-                lcd.print_line_col_in_place(1, 0, "RPM: ")
+                lcd.print_line_col_in_place(0, 0, "Duty:")
+                lcd.print_line_col_in_place(1, 0, "RPM:")
+
+                lcd.print_line_col_in_place(0, 9, "|")
+                lcd.print_line_col_in_place(1, 9, "|")
 
         print("Duty Cycle: " + str(duty_cycle))
 
