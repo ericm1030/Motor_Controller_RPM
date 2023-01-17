@@ -182,14 +182,18 @@ def emergency_stop(pin):
 emergency_stop_switch = Pin(6, Pin.IN, Pin.PULL_UP)
 emergency_stop_switch.irq(trigger=Pin.IRQ_FALLING, handler=emergency_stop)
 
-
-def main():
-    global update_flag, e_stop_tripped_flag
-
+def print_running_screen():
+    lcd.clear()
     lcd.print_line_col_in_place(0, 0, "Duty:")
     lcd.print_line_col_in_place(1, 0, "RPM:")
     lcd.print_line_col_in_place(0, 9, "|")
     lcd.print_line_col_in_place(1, 9, "|")
+
+
+def main():
+    global update_flag, e_stop_tripped_flag
+
+    print_running_screen()
 
     adc_value = 0
     duty_cycle = 0
@@ -239,7 +243,7 @@ def main():
 
                     # Start Motor if at 0 rpm, ramp up to set point.
                     # Allows the motor controller to start up without adjusting the duty cycle
-                    if rpm == 0 or ramp_up_function_enabled:
+                    if rpm == 0 and ramp_up_function_enabled:
                         print("Ramping up")
 
                         adc_delta = adc_value / (rpm_ramp_up_steps - 1)
@@ -256,15 +260,21 @@ def main():
                     else:
                         pwm.duty_u16(adc_value)
 
+                # Only runs if switch is in position 3 when micro is powered on
                 else:
                     green_led.value(1)
                     red_led.value(1)
+
+                    if switch.switch_pos() == 1:
+                        switch_start_in_position_3 = False
+                        ramp_up_function_enabled = True
+
 
             # Adjusting mode. Motor is kept in last state,
             # Changing duty cycle is allowed in this mode
             elif switch.switch_pos() == 2:
                 print("Switch 2")
-                switch_start_in_position_3 = False
+                # switch_start_in_position_3 = False
                 green_led.value(0)
                 red_led.value(1)
                 duty_cycle = int((adc_value / 65535) * 100)
@@ -327,12 +337,8 @@ def main():
                 # sm_blink_led.active(0)
 
                 # Reset LCD after E Stop
-                lcd.clear()
-                lcd.print_line_col_in_place(0, 0, "Duty:")
-                lcd.print_line_col_in_place(1, 0, "RPM:")
+                print_running_screen()
 
-                lcd.print_line_col_in_place(0, 9, "|")
-                lcd.print_line_col_in_place(1, 9, "|")
 
         print("Duty Cycle: " + str(duty_cycle))
 
