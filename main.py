@@ -4,7 +4,6 @@ from machine import Pin, I2C, ADC, PWM, Signal
 import uarray as array
 import rp2
 import gc
-# from pio_rpm import *
 from pico_i2c_lcd import I2cLcd
 import _thread
 
@@ -77,51 +76,6 @@ def pulse_count():
     irq(block, 5)  # set irq and wait for gate PIO to acknowledge
 
 
-# @asm_pio(sideset_init=PIO.OUT_HIGH)
-# def gate():
-#     """PIO to generate gate signal."""
-#     wait(0, pin, 0)
-#     wrap_target()
-#     mov(x, osr)
-#     wait(1, pin, 0) # Probably not needed, since at this point signal will be high anyway
-#     label("loopstart")
-#     jmp(x_dec, "loopstart") .side(0)
-#     wait(0, pin, 0)
-#     wait(1, pin, 0) .side(1)
-#     irq(noblock, 0)
-#     wrap()
-#
-# @asm_pio()
-# def clock_count():
-#     """PIO for counting clock pulses during gate low."""
-#     wait(1, pin, 0)
-#     wrap_target()
-#     mov(x, osr)
-#     wait(0, pin, 0)
-#     label("counter")
-#     jmp(pin, "output")
-#     jmp(x_dec, "counter")
-#     label("output")
-#     mov(isr, x)
-#     push()
-#
-# @asm_pio(sideset_init=PIO.OUT_HIGH)
-# def pulse_count():
-#     """PIO for counting incoming pulses during gate low."""
-#     wait(1, pin, 0)
-#     wrap_target()
-#     mov(x, osr)
-#     wait(0, pin, 0) .side(0)
-#     label("counter")
-#     wait(0, pin, 1)
-#     wait(1, pin, 1)
-#     jmp(pin, "output")
-#     jmp(x_dec, "counter")
-#     label("output")
-#     mov(isr, x) .side(1)
-#     push()
-#     wrap()
-
 def init_sm(freq, input_pin, gate_pin, pulse_fin_pin):
     """Starts state machines."""
     gate_pin.value(1)
@@ -151,7 +105,6 @@ update_flag = False
 data = array.array("I", [0, 0])
 
 
-# @timed_function
 def counter_handler(sm):
     print("IRQ")
     global update_flag
@@ -270,13 +223,14 @@ def main():
         # Read Potentiometer only if switch is in position 1 or 2
         if switch.switch_pos() == 1 or switch.switch_pos() == 2:
             adc_value = 65535 - adc.read_u16()
-            print("ADC Value: " + str(adc_value))
+            # print("ADC Value: " + str(adc_value))
 
         # If E Stop is not tripped, If tripped only mode 1 can reset it
         if not e_stop_tripped_flag:
 
             # Running mode.Motor is ON!,
             # Changing duty cycle is NOT! allowed in this mode
+            # This prevents vibrations or unintended changing of the motor speed
             if switch.switch_pos() == 3:
                 if not switch_start_in_position_3:
                     print("Switch 3")
@@ -284,7 +238,8 @@ def main():
                     red_led.value(0)
 
                     # Start Motor if at 0 rpm, ramp up to set point.
-                    if rpm == 0 and ramp_up_function_enabled:
+                    # Allows the motor controller to start up without adjusting the duty cycle
+                    if rpm == 0 or ramp_up_function_enabled:
                         print("Ramping up")
 
                         adc_delta = adc_value / (rpm_ramp_up_steps - 1)
@@ -297,6 +252,7 @@ def main():
 
                         ramp_up_function_enabled = False
 
+                    # Else just set duty cycle
                     else:
                         pwm.duty_u16(adc_value)
 
@@ -329,8 +285,8 @@ def main():
             # Error mode. Motor is off
             else:
                 print("Switch Error")
-                green_led.value(0)
-                red_led.value(0)
+                green_led.value(1)
+                red_led.value(1)
                 pwm.duty_u16(0)
 
             # Update LCD
