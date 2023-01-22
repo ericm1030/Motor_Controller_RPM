@@ -330,11 +330,20 @@ def main():
 
 
     # Define Custom Characters for LCD
-    up_arrow = bytearray([0b00000, 0b00100, 0b01110, 0b11111, 0b00100, 0b00100, 0b00100, 0b00000])
-    down_arrow = bytearray([0b00000, 0b00100, 0b00100, 0b00100, 0b11111, 0b01110, 0b00100, 0b00000])
+    # 0 - up arrow
+    # 1 - down arrow
+    # 2 - Switch in position 3
+    # 3 - Switch in position 2
+    # 4 - Switch in position 1
+    # 5 - E-Stop Tripped
+    # 6 - E-Stop Not Tripped
 
-    lcd.custom_char(0, up_arrow)
-    lcd.custom_char(1, down_arrow)
+    lcd.custom_char(0, bytearray([0b00000, 0b00100, 0b01110, 0b11111, 0b00100, 0b00100, 0b00100, 0b00000]))
+    lcd.custom_char(1, bytearray([0b00000, 0b00100, 0b00100, 0b00100, 0b11111, 0b01110, 0b00100, 0b00000]))
+
+    lcd.custom_char(2, bytearray([0b00000,0b00000,0b00000,0b10000,0b01001,0b11100,0b11101,0b00000])) # Switch in position 3
+    lcd.custom_char(3, bytearray([0b00000,0b00000,0b00000,0b01000,0b01001,0b11100,0b11101,0b00000])) # Switch in position 2
+    lcd.custom_char(4, bytearray([0b00000,0b00000,0b00000,0b00100,0b01001,0b11100,0b11101,0b00000])) # Switch in position 1
 
     while True:
         time.sleep(0.25) # Debug Delay Remove before Release
@@ -406,8 +415,13 @@ def main():
                 else:
                     red_blink_rapid.active(1)
                     lcd.clear()
-                    lcd.print_line_col_in_place(0, 0, "Switch pos -> 3",)
-                    lcd.print_line_col_in_place(1, 0, "Move to pos 1")
+                    lcd.print_line_col_in_place(0, 0, "Switch ")
+                    lcd.print_char(0,7,chr(2))
+                    lcd.print_line_col_in_place(0, 8, "3")
+                    lcd.print_line_col_in_place(0, 9, "->")
+                    lcd.print_char(0,12,chr(4))
+                    lcd.print_line_col_in_place(0, 13, "1")
+                    lcd.print_line_col_in_place(1, 0, "Move to Pos 1")
 
                     while True:
                         # Reset if switch is moved to position 1
@@ -452,19 +466,23 @@ def main():
             if time.ticks_diff(time.ticks_ms(), lcd_start) > lcd_refresh_time and not e_stop_tripped_flag:
                 print("Updating LCD")
 
-                # Print Mode on LCD
+                # Print Mode and switch position on LCD
                 if switch.switch_pos() == 1:
-                    # lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 13, "Off")
+                    lcd.print_char(1,14,chr(4))
+                    lcd.print_line_col_in_place(1, 15, "1")
+                    lcd.print_line_col_in_place(1, 11, "Off")
 
                 elif switch.switch_pos() == 2:
-                    # lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 13, "Adj")
+                    lcd.print_char(1, 14, chr(3))
+                    lcd.print_line_col_in_place(1, 15, "2")
+                    lcd.print_line_col_in_place(1, 11, "Adj")
 
                 elif switch.switch_pos() == 3:
-                    # lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 15, " ")
-                    lcd.print_line_col_in_place(1, 13, "On")
+
+                    lcd.print_char(1, 14, chr(2))
+                    lcd.print_line_col_in_place(1, 15, "3")
+                    lcd.print_line_col_in_place(1, 13, " ")
+                    lcd.print_line_col_in_place(1, 11, "On")
 
                 # Print Duty cycle on LCD if in Adjusting mode or safety mode
                 if switch.switch_pos() == 2 or switch.switch_pos() == 1:
