@@ -4,9 +4,11 @@ from machine import Pin, I2C, ADC, PWM, Signal
 import uarray as array
 from machine import WDT
 from micropython import const
+import _thread
 import rp2
 from rp2 import PIO, asm_pio
 from pico_i2c_lcd import I2cLcd
+
 
 machine.freq(133000000)
 print("Current Frequency:" + str(machine.freq()))
@@ -126,6 +128,7 @@ def counter_handler(sm):
 # Blink LED state machine
 @rp2.asm_pio(set_init=rp2.PIO.OUT_LOW)
 def blink_rapid():
+    set(pins, 0)
     wrap_target()
     set(pins, 1)   [31]
     nop()          [31]
@@ -237,6 +240,12 @@ red_blink_rapid = rp2.StateMachine(4, blink_rapid, freq=2400, set_base=red_led)
 sm7 = rp2.StateMachine(7, led_fade_on, freq=2400, set_base=green_led)
 sm6 = rp2.StateMachine(6, led_fade_off, freq=2401, set_base=green_led)
 
+# def blink_red_rapid(state):
+#     if state == 1:
+#         red_blink_rapid.active(1)
+#     else:
+#         red_blink_rapid.active(0)
+
 
 def fade_led(state):
     if state == 1:
@@ -268,12 +277,35 @@ def print_running_screen():
     lcd.clear()
     lcd.print_line_col_in_place(0, 0, "Duty:")
     lcd.print_line_col_in_place(1, 0, "RPM:")
-    lcd.print_line_col_in_place(0, 9, "|")
-    lcd.print_line_col_in_place(1, 9, "|")
+
+    # lcd.print_line_col_in_place(0, 9, "|")
+    # lcd.print_line_col_in_place(1, 9, "|")
 
 
+def ramp_up_pwm(pwm_list, step_delay):
+    global previous_set_duty
+    print("Thread2: Ramping up Function")
+    print("Thread2: PWM List: " + str(pwm_list))
+    print("Thread2: Step Delay: " + str(step_delay))
+    for i in pwm_list:
+        if switch.switch_pos() == 1 or switch.switch_pos() == 2:
+            break
+
+        if not e_stop_tripped_flag:
+            print("Thread2: New Duty: " + str(i))
+            pwm.duty_u16(i)
+            previous_set_duty = i
+            time.sleep(step_delay)
+
+    print("Thread2: Ramping up Function Complete")
+    return 0
+
+
+# Create a new thread
+
+previous_set_duty = 0
 def main():
-    global update_flag, e_stop_tripped_flag
+    global update_flag, e_stop_tripped_flag, previous_set_duty
 
     print_running_screen()
 
@@ -291,9 +323,17 @@ def main():
     rpm_ramp_up_step_time = const(1)
     ramp_up_function_enabled = False
 
+    # History Variables
+    # previous_set_duty = 0
+    previous_rpm = 0
+
+
     while True:
-        # time.sleep(0.25)
+        time.sleep(0.25) # Debug Delay Remove before Release
+
+        # Todo check if rpm = 0 is needed in the while loop
         rpm = 0
+
 
         # Read RPM and switch.switch_pos() == 3
         if update_flag and not switch_start_in_position_3:
@@ -319,11 +359,9 @@ def main():
             # This prevents vibrations or unintended changing of the motor speed
             if switch.switch_pos() == 3:
                 if not switch_start_in_position_3:
-                    # print("Switch 3")
+                    print("Switch 3")
                     fade_led(0) # Turn off Green LED
                     fade_led(2) # Green LED ON Solid
-                    # green_led.value(1)
-                    # red_led.value(0) # Turn off Red LED
                     red_blink_rapid.active(0) # Turn off Red LED Blinking
 
 
@@ -336,29 +374,32 @@ def main():
                         adc_step_list = [int(adc_delta * i) for i in range(rpm_ramp_up_steps)]
                         print("Adc Step Lists: " + str(adc_step_list))
 
-                        for i in range(rpm_ramp_up_steps):
-                            # Break out of loop if switch is moved to position 1 or 2
-                            if switch.switch_pos() == 1 or switch.switch_pos() == 2:
-                                break
+                        # Ramp up PWM to set point in different thread to prevent blocking
+                        thread_2 = _thread.start_new_thread(ramp_up_pwm, (adc_step_list, rpm_ramp_up_step_time))
 
-                            pwm.duty_u16(adc_step_list[i])
-                            time.sleep(rpm_ramp_up_step_time)
-                            print("Duty Cycle: " + str(adc_step_list[i]))
+                        previous_set_duty = adc_value
+                        # for i in range(rpm_ramp_up_steps):
+                        #     # Break out of loop if switch is moved to position 1 or 2
+                        #     if switch.switch_pos() == 1 or switch.switch_pos() == 2:
+                        #         break
+                        #
+                        #     pwm.duty_u16(adc_step_list[i])
+                        #     time.sleep(rpm_ramp_up_step_time)
+                        #     print("Duty Cycle: " + str(adc_step_list[i]))
 
                         ramp_up_function_enabled = False
 
                     # Else just set duty cycle
                     else:
                         pwm.duty_u16(adc_value)
+                        # previous_set_duty = adc_value
 
-                # Only runs if switch is in position 3 when micro is powered on
+                # If switch is in position 3 and the micro is powered on
                 else:
                     red_blink_rapid.active(1)
                     lcd.clear()
                     lcd.print_line_col_in_place(0, 0, "Switch pos -> 3",)
                     lcd.print_line_col_in_place(1, 0, "Move to pos 1")
-                    # green_led.value(1)
-                    # red_led.value(1)
 
                     while True:
                         # Reset if switch is moved to position 1
@@ -366,9 +407,11 @@ def main():
                             switch_start_in_position_3 = False
                             ramp_up_function_enabled = True
 
-                            fade_led(0)
+                            fade_led(0) # Turn off Green LED
+                            red_blink_rapid.active(0) # Turn off Red LED Blinking
 
-                            red_blink_rapid.active(0)
+                            # red_led.value(0) # Turn off Red LED
+
                             print_running_screen()
                             break
 
@@ -376,7 +419,7 @@ def main():
             # Adjusting mode. Motor is kept in last state,
             # Changing duty cycle is allowed in this mode
             elif switch.switch_pos() == 2:
-                # print("Switch 2")
+                print("Switch 2")
                 # switch_start_in_position_3 = False
                 fade_led(1)
                 # green_led.value(0)
@@ -387,52 +430,91 @@ def main():
 
             # Safety mode. Motor is off
             elif switch.switch_pos() == 1:
-                # print("Switch 1")
+                print("Switch 1")
                 pwm.duty_u16(0)
                 switch_start_in_position_3 = False
                 ramp_up_function_enabled = True
                 fade_led(0)
                 # green_led.value(0)
-                red_led.value(0)
+                # red_led.value(0)
                 duty_cycle = int((adc_value / 65535) * 100)
 
 
             # Update LCD every 500ms
             if time.ticks_diff(time.ticks_ms(), lcd_start) > lcd_refresh_time and not e_stop_tripped_flag:
-                # print("Updating LCD")
+                print("Updating LCD")
 
                 # Print Mode on LCD
                 if switch.switch_pos() == 1:
-                    lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 11, "Off")
+                    # lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(1, 13, "Off")
 
                 elif switch.switch_pos() == 2:
-                    lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 11, "Adj")
+                    # lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(1, 13, "Adj")
 
                 elif switch.switch_pos() == 3:
-                    lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(1, 11, "   ")
-                    lcd.print_line_col_in_place(1, 11, "On")
+                    # lcd.print_line_col_in_place(0, 11, "Mode:")
+                    lcd.print_line_col_in_place(0, 15, " ")
+                    lcd.print_line_col_in_place(1, 13, "On")
 
                 # Print Duty cycle on LCD if in Adjusting mode or safety mode
                 if switch.switch_pos() == 2 or switch.switch_pos() == 1:
-                    lcd.print_line_col_in_place(0, 5, "   ")
-                    lcd.print_line_col_in_place(0, 5, "%1.0f" % duty_cycle + "%")
+                    lcd.print_line_col_in_place(1, 5, "   ")
+                    lcd.print_line_col_in_place(1, 5, "%1.0f" % duty_cycle + "%")
 
-                # Always print RPM on LCD
+                # If duty cycle changes update the change vector on the lcd
+                if pwm.duty_u16() > previous_set_duty:
+                    print(f"Duty Cycle Changed, prev: {previous_set_duty}, new: {pwm.duty_u16()}, diff: {pwm.duty_u16() - previous_set_duty}")
+                    lcd.print_line_col_in_place(0, 8, "^")
+                    # lcd.print_line_col_in_place(0, 0, "%1.0f" % pwm.duty_u16() + "%")
+                    previous_set_duty = pwm.duty_u16()
+
+                elif pwm.duty_u16()+1 < previous_set_duty:
+                    print(f"Duty Cycle Changed, prev: {previous_set_duty}, new: {pwm.duty_u16()}, diff: {pwm.duty_u16()+1 - previous_set_duty}")
+                    lcd.print_line_col_in_place(0, 8, "v")
+                    # lcd.print_line_col_in_place(0, 0, "%1.0f" % pwm.duty_u16() + "%")
+                    previous_set_duty = pwm.duty_u16()
+                else:
+                    lcd.print_line_col_in_place(0, 8, "-")
+
+                # Print RPM Vector on LCD
+                if abs(rpm-previous_rpm) > 5:
+                    print("RPM Increased")
+                    print("RPM Changed, prev: " + str(previous_rpm) + ", new: " + str(rpm))
+                    lcd.print_line_col_in_place(1, 8, "^")
+                    previous_rpm = rpm
+
+                elif 5 > abs(rpm - previous_rpm) > 0:
+                    print("RPM Decreased")
+                    print("RPM Changed, prev: " + str(previous_rpm) + ", new: " + str(rpm))
+                    lcd.print_line_col_in_place(1, 8, "v")
+                    previous_rpm = rpm
+
+                else:
+                    lcd.print_line_col_in_place(1, 8, "-")
+
+                # Print rpm if value has changed more than 5%
+                # if abs(rpm - previous_rpm) > 5:
+                #     print("RPM Changed, prev: " + str(previous_rpm) + ", new: " + str(rpm))
+                #     lcd.print_line_col_in_place(1, 4, "    ")
+                #     lcd.print_line_col_in_place(1, 4, "%1.0f" % rpm)
+                #     previous_rpm = rpm
+
                 lcd.print_line_col_in_place(1, 4, "    ")
                 lcd.print_line_col_in_place(1, 4, str(rpm))
+
                 lcd_start = time.ticks_ms()
 
         # Reset E Stop
         elif e_stop_tripped_flag:
+            print(f"Resetting E Stop - {time.time()}")
             if switch.switch_pos() == 1 and emergency_stop_switch.value() == 1:
                 e_stop_tripped_flag = False
                 print("Switch 1")
                 red_blink_rapid.active(0)
-                green_led.value(0)
-                red_led.value(0)
+                # green_led.value(0)
+                # red_led.value(0)
 
                 # Reset LCD after E Stop
                 print_running_screen()
