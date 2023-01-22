@@ -301,9 +301,8 @@ def ramp_up_pwm(pwm_list, step_delay):
     return 0
 
 
-# Create a new thread
-
 previous_set_duty = 0
+
 def main():
     global update_flag, e_stop_tripped_flag, previous_set_duty
 
@@ -327,6 +326,15 @@ def main():
     # previous_set_duty = 0
     previous_rpm = 0
 
+
+
+
+    # Define Custom Characters for LCD
+    up_arrow = bytearray([0b00000, 0b00100, 0b01110, 0b11111, 0b00100, 0b00100, 0b00100, 0b00000])
+    down_arrow = bytearray([0b00000, 0b00100, 0b00100, 0b00100, 0b11111, 0b01110, 0b00100, 0b00000])
+
+    lcd.custom_char(0, up_arrow)
+    lcd.custom_char(1, down_arrow)
 
     while True:
         time.sleep(0.25) # Debug Delay Remove before Release
@@ -455,7 +463,7 @@ def main():
 
                 elif switch.switch_pos() == 3:
                     # lcd.print_line_col_in_place(0, 11, "Mode:")
-                    lcd.print_line_col_in_place(0, 15, " ")
+                    lcd.print_line_col_in_place(1, 15, " ")
                     lcd.print_line_col_in_place(1, 13, "On")
 
                 # Print Duty cycle on LCD if in Adjusting mode or safety mode
@@ -466,33 +474,35 @@ def main():
                 # If duty cycle changes update the change vector on the lcd
                 if pwm.duty_u16() > previous_set_duty:
                     print(f"Duty Cycle Changed, prev: {previous_set_duty}, new: {pwm.duty_u16()}, diff: {pwm.duty_u16() - previous_set_duty}")
-                    lcd.print_line_col_in_place(0, 8, "^")
+                    lcd.print_char(0, 9, chr(0))
+
                     # lcd.print_line_col_in_place(0, 0, "%1.0f" % pwm.duty_u16() + "%")
                     previous_set_duty = pwm.duty_u16()
 
                 elif pwm.duty_u16()+1 < previous_set_duty:
                     print(f"Duty Cycle Changed, prev: {previous_set_duty}, new: {pwm.duty_u16()}, diff: {pwm.duty_u16()+1 - previous_set_duty}")
-                    lcd.print_line_col_in_place(0, 8, "v")
+                    lcd.print_char(0, 9, chr(1))
+
                     # lcd.print_line_col_in_place(0, 0, "%1.0f" % pwm.duty_u16() + "%")
                     previous_set_duty = pwm.duty_u16()
                 else:
-                    lcd.print_line_col_in_place(0, 8, "-")
+                    lcd.print_line_col_in_place(0, 9, "-")
 
                 # Print RPM Vector on LCD
                 if abs(rpm-previous_rpm) > 5:
                     print("RPM Increased")
                     print("RPM Changed, prev: " + str(previous_rpm) + ", new: " + str(rpm))
-                    lcd.print_line_col_in_place(1, 8, "^")
+                    lcd.print_char(1, 9, chr(0))
                     previous_rpm = rpm
 
                 elif 5 > abs(rpm - previous_rpm) > 0:
                     print("RPM Decreased")
                     print("RPM Changed, prev: " + str(previous_rpm) + ", new: " + str(rpm))
-                    lcd.print_line_col_in_place(1, 8, "v")
+                    lcd.print_char(1, 9, chr(1))
                     previous_rpm = rpm
 
                 else:
-                    lcd.print_line_col_in_place(1, 8, "-")
+                    lcd.print_line_col_in_place(1, 9, "-")
 
                 # Print rpm if value has changed more than 5%
                 # if abs(rpm - previous_rpm) > 5:

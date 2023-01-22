@@ -193,6 +193,10 @@ class LcdApi:
         self.move_to(col, line)
         self.putstr(text)
 
+    def print_char(self, line, col, char):
+        self.move_to(col, line)
+        self.putchar(char)
+
     def hal_write_command(self, cmd):
         """Write a command to the LCD.
 
