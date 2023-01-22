@@ -460,8 +460,8 @@ def main():
 
                 # Print Duty cycle on LCD if in Adjusting mode or safety mode
                 if switch.switch_pos() == 2 or switch.switch_pos() == 1:
-                    lcd.print_line_col_in_place(1, 5, "   ")
-                    lcd.print_line_col_in_place(1, 5, "%1.0f" % duty_cycle + "%")
+                    lcd.print_line_col_in_place(0, 5, "   ")
+                    lcd.print_line_col_in_place(0, 5, "%1.0f" % duty_cycle + "%")
 
                 # If duty cycle changes update the change vector on the lcd
                 if pwm.duty_u16() > previous_set_duty:
