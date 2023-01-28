@@ -10,6 +10,8 @@ from rp2 import PIO, asm_pio
 from pico_i2c_lcd import I2cLcd
 
 
+pwm_freq = const(20)
+
 machine.freq(133000000)
 print("Current Frequency:" + str(machine.freq()))
 
@@ -229,7 +231,7 @@ switch = Switch(27, 26)
 
 # PWM for Motor
 pwm = PWM(Pin(4))
-pwm.freq(21)
+pwm.freq(pwm_freq)
 pwm.duty_u16(0)
 
 e_stop_tripped_flag = False
